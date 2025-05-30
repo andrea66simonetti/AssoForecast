@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>AssoForecast - Analisi Finanziaria LIVE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="logo.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <style>
+    body { font-family: 'Inter', Arial, sans-serif; margin: 0; background: #0a0e27; color: #fff;}
+    .main-content { max-width: 1100px; margin: auto; padding: 2rem;}
+    h1 { color: #3b82f6; text-align: center; margin-bottom: 2rem;}
+    .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap;}
+    label { font-weight: 500; }
+    select, input { padding: 0.7rem 1rem; border-radius: 8px; border: 1px solid #374151; font-size: 1rem; background: #252b4a; color: #fff;}
+    button { padding: 0.7rem 1.5rem; border-radius: 8px; border: none; font-weight: 600; background: #3b82f6; color: #fff; cursor: pointer;}
+    button:hover { background: #2563eb;}
+    .status { margin-left: 1rem; font-weight: 600;}
+    .chart-container { background: #1a1f3a; border-radius: 12px; padding: 2rem; margin-bottom: 2rem;}
+    .news-item { background: #252b4a; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 3px solid #3b82f6;}
+    .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap: 1.5rem;}
+    .data-card { background: #1a1f3a; border-radius: 10px; padding: 1.5rem; border-left: 4px solid #3b82f6;}
+    .data-card h5 { color: #3b82f6;}
+    .positive { color: #10b981;}
+    .negative { color: #ef4444;}
+    @media (max-width:700px) {
+      .main-content { padding: 1rem;}
+      .data-grid { grid-template-columns: 1fr;}
+      .chart-container { padding: 1rem;}
+    }
+  </style>
+</head>
+<body>
+  <div class="main-content">
+    <h1>AssoForecast - Analisi Finanziaria LIVE</h1>
+    
+    <!-- SEZIONE MERCATI -->
+    <section id="markets-section" class="content-section active">
+      <div class="controls">
+        <label>Analizza Strumento:</label>
+        <select id="symbolSelect">
+          <option value="AAPL">Apple (AAPL)</option>
+          <option value="GOOGL">Alphabet (GOOGL)</option>
+          <option value="TSLA">Tesla (TSLA)</option>
+          <option value="MSFT">Microsoft (MSFT)</option>
+          <option value="BTC">Bitcoin (BTC)</option>
+        </select>
+        <button id="updateMarket">Analizza</button>
+        <span id="marketStatus" class="status">Pronto</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="marketChart" width="800" height="350"></canvas>
+        <div style="margin-top:1rem;">
+          <b>Prezzo Attuale:</b> <span id="currentPrice">--</span>
+          &nbsp;|&nbsp;
+          <b>Variazione:</b> <span id="priceChange">--</span>
+        </div>
+      </div>
+      <div class="data-grid" style="margin-bottom:2rem">
+        <div class="data-card">
+          <h5>📊 Analisi Tecnica</h5>
+          <div id="technicalAnalysis">
+            <p><strong>RSI (14):</strong> <span id="rsiValue">--</span></p>
+            <p><strong>Media Mobile (20):</strong> <span id="maValue">--</span></p>
+            <p><strong>Supporto:</strong> <span id="supportValue">--</span></p>
+            <p><strong>Resistenza:</strong> <span id="resistanceValue">--</span></p>
+          </div>
+        </div>
+        <div class="data-card">
+          <h5>💎 Fair Value</h5>
+          <div id="fairValueAnalysis">
+            <p><strong>Fair Value:</strong> <span id="fairValue">--</span></p>
+            <p><strong>Upside/Downside:</strong> <span id="upsideDownside">--</span></p>
+            <p><strong>Valutazione:</strong> <span id="valuation">--</span></p>
+          </div>
+        </div>
+        <div class="data-card">
+          <h5>📈 Market Sentiment</h5>
+          <div id="marketSentiment">
+            <p><strong>Sentiment Score:</strong> <span id="sentimentScore">--</span></p>
+            <p><strong>News Impact:</strong> <span id="newsImpact">--</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- SEZIONE NEWS -->
+    <section id="news-section" class="content-section">
+      <div class="controls">
+        <input id="newsKeyword" placeholder="bitcoin, apple, market..." value="bitcoin">
+        <button id="fetchNews">Analizza News</button>
+      </div>
+      <div id="newsResults"></div>
+    </section>
+    
+    <!-- SEZIONE FUNDAMENTALS -->
+    <section id="fund-section" class="content-section">
+      <div class="controls">
+        <label>Analisi Azienda:</label>
+        <select id="fundSymbol">
+          <option value="AAPL">Apple</option>
+          <option value="GOOGL">Alphabet</option>
+          <option value="TSLA">Tesla</option>
+          <option value="MSFT">Microsoft</option>
+        </select>
+        <button id="fetchFund">Analizza Fundamentals</button>
+      </div>
+      <div id="fundData"></div>
+    </section>
+    
+    <!-- SEZIONE SCREENER -->
+    <section id="screener-section" class="content-section">
+      <div class="controls">
+        <button id="runScreener">Top Growth Stocks</button>
+      </div>
+      <div id="screenerResults"></div>
+    </section>
+  </div>
+  <script>
+const API_CONFIG = {
+  ALPHA_VANTAGE: 'CT3HPV07LIQL2S0X',
+  FMP: '295c0d7432f24ba1a4c651171e583b33',
+  NEWS: '295c0d7432f24ba1a4c651171e583b33',
+  QUANDL: 'sDeMHtpYpRpyV815gsda'
+};
+let chartInstances = {};
+
+document.getElementById('updateMarket').onclick = updateMarketAnalysis;
+
+async function updateMarketAnalysis() {
+  let symbol = document.getElementById('symbolSelect').value;
+  let apiKey = API_CONFIG.ALPHA_VANTAGE;
+  document.getElementById('marketStatus').textContent = "Analizzando...";
+  let url, prices = [], labels = [];
+  if(symbol === "BTC") {
+    url = `https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey=${apiKey}`;
+    let response = await fetch(url);
+    let data = await response.json();
+    if(data["Time Series (Digital Currency Daily)"]){
+      for(let date in data["Time Series (Digital Currency Daily)"]){
+        labels.push(date);
+        prices.push(parseFloat(data["Time Series (Digital Currency Daily)"][date]["4a. close (USD)"]));
+      }
+      labels = labels.reverse().slice(-60); prices = prices.reverse().slice(-60);
+    } else { document.getElementById('marketStatus').textContent = "Errore API"; return;}
+  } else {
+    url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&apikey=${apiKey}`;
+    let response = await fetch(url);
+    let data = await response.json();
+    if(data["Time Series (Daily)"]){
+      for(let date in data["Time Series (Daily)"]){
+        labels.push(date);
+        prices.push(parseFloat(data["Time Series (Daily)"][date]["4. close"]));
+      }
+      labels = labels.reverse().slice(-60); prices = prices.reverse().slice(-60);
+    } else { document.getElementById('marketStatus').textContent = "Errore API"; return;}
+  }
+  let canvas = document.getElementById('marketChart');
+  if (chartInstances.market) chartInstances.market.destroy();
+  let ctx = canvas.getContext('2d');
+  chartInstances.market = new Chart(ctx, {
+    type:'line',
+    data:{labels: labels, datasets: [{label:symbol,data:prices,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.11)',fill:true,tension:0.4,pointRadius:0}]},
+    options:{responsive:true,plugins:{legend:{labels:{color:getComputedStyle(document.documentElement).getPropertyValue('--text-primary')}}},
+      scales:{x:{ticks:{color:getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')}},
+              y:{ticks:{color:getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')}}}}
+  });
+  document.getElementById('currentPrice').textContent = prices[prices.length-1];
+  document.getElementById('priceChange').textContent = ((prices[prices.length-1]-prices[prices.length-2])/prices[prices.length-2]*100).toFixed(2) + "%";
+  document.getElementById('marketStatus').textContent = "Analisi Completata";
+  updateTechnicalAnalysis(prices);
+  updateFairValueAnalysis(symbol, prices[prices.length-1]);
+  updateMarketSentiment(symbol);
+}
+
+// Analisi Tecnica
+function updateTechnicalAnalysis(prices) {
+  if (!prices || prices.length < 20) return;
+  let rsi = calcRSI(prices, 14);
+  document.getElementById('rsiValue').textContent = rsi.toFixed(1);
+  let ma20 = prices.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  document.getElementById('maValue').textContent = ma20.toFixed(2);
+  let recent = prices.slice(-30);
+  let support = Math.min(...recent), resistance = Math.max(...recent);
+  document.getElementById('supportValue').textContent = support.toFixed(2);
+  document.getElementById('resistanceValue').textContent = resistance.toFixed(2);
+}
+function calcRSI(prices, period) {
+  let gains = 0, losses = 0;
+  for (let i = prices.length - period; i < prices.length; i++) {
+    let change = prices[i] - prices[i - 1];
+    if (change > 0) gains += change; else losses -= change;
+  }
+  let avgGain = gains / period, avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  let rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+// Fair Value (statico demo)
+function updateFairValueAnalysis(symbol, price) {
+  const fairValues = { 'AAPL': 195.33, 'GOOGL': 165.80, 'TSLA': 280.00, 'MSFT': 420.50, 'BTC': 52000 };
+  let fairValue = fairValues[symbol] || price;
+  let upside = ((fairValue - price) / price * 100);
+  document.getElementById('fairValue').textContent = fairValue;
+  document.getElementById('upsideDownside').textContent = (upside > 0 ? "+" : "") + upside.toFixed(1) + "%";
+  document.getElementById('valuation').textContent = upside > 10 ? "Sottovalutato" : upside < -10 ? "Sopravvalutato" : "Fair";
+}
+
+// Sentiment (statico demo)
+function updateMarketSentiment(symbol) {
+  let sentiment = { 'AAPL': 75, 'GOOGL': 68, 'TSLA': 59, 'MSFT': 82, 'BTC': 88 }[symbol] || 70;
+  document.getElementById('sentimentScore').textContent = sentiment;
+  document.getElementById('newsImpact').textContent = sentiment > 75 ? "Molto positivo" : sentiment < 60 ? "Negativo" : "Neutro";
+}
+
+// NEWS LIVE CON NewsAPI
+document.getElementById('fetchNews').onclick = async function() {
+  let keyword = document.getElementById('newsKeyword').value || 'bitcoin';
+  let url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(keyword)}&language=it&apiKey=${API_CONFIG.NEWS}`;
+  let res = await fetch(url); let data = await res.json();
+  let html = '';
+  if(data.articles){
+    data.articles.slice(0,4).forEach(article => {
+      html += `<div class="news-item">
+        <h6>${article.title}</h6>
+        <p>${article.description||''}</p>
+        <small>📰 ${article.source.name} • 📅 ${article.publishedAt.slice(0,10)} </small>
+      </div>`;
+    });
+  }
+  document.getElementById('newsResults').innerHTML = html;
+};
+
+// FUNDAMENTALS LIVE CON FMP
+document.getElementById('fetchFund').onclick = async function() {
+  let symbol = document.getElementById('fundSymbol').value;
+  let url = `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${API_CONFIG.FMP}`;
+  let res = await fetch(url); let data = await res.json();
+  if(data && data[0]){
+    let d = data[0];
+    document.getElementById('fundData').innerHTML = `
+    <div class="data-card">
+      <h5>${d.companyName} (${symbol})</h5>
+      <p><b>Settore:</b> ${d.sector} <br>
+         <b>Prezzo:</b> $${d.price} <br>
+         <b>Market Cap:</b> $${Math.round(d.mktCap/1e9)} Bln <br>
+         <b>P/E:</b> ${d.pe} <br>
+         <b>Beta:</b> ${d.beta} <br>
+         <b>Dividend Yield:</b> ${d.lastDiv} <br>
+         <b>Descrizione:</b> ${d.description?.slice(0,160)}...
+      </p>
+    </div>
+    `;
+  } else {
+    document.getElementById('fundData').innerHTML = "Nessun dato disponibile.";
+  }
+};
+
+// SCREENER LIVE CON FMP
+document.getElementById('runScreener').onclick = async function() {
+  let url = `https://financialmodelingprep.com/api/v3/stock-screener?marketCapMoreThan=100000000000&limit=4&apikey=${API_CONFIG.FMP}`;
+  let res = await fetch(url); let data = await res.json();
+  let html = '<div class="data-grid">';
+  if(data){
+    data.forEach(stock => {
+      html += `<div class="data-card">
+        <h5>${stock.companyName} (${stock.symbol})</h5>
+        <p>
+          <b>Prezzo:</b> $${stock.price} <br>
+          <b>Settore:</b> ${stock.sector||'-'} <br>
+          <b>Market Cap:</b> $${Math.round(stock.marketCap/1e9)} Bln <br>
+          <b>P/E:</b> ${stock.pe} <br>
+          <b>Beta:</b> ${stock.beta}
+        </p>
+      </div>`;
+    });
+  }
+  html += '</div>';
+  document.getElementById('screenerResults').innerHTML = html;
+};
+
+// Carica dati subito all'avvio
+window.onload = ()=>{
+  updateMarketAnalysis();
+};
+  </script>
+</body>
+</html>
